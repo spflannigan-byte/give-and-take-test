@@ -1,0 +1,33 @@
+Give&Take V1.3.2 — 2026-11-10
+
+N2: Guard startup recovery-path browser storage reads so blocked localStorage cannot throw a second uncaught error and prevent the app from rendering. Setup pre-restore availability and export reads are guarded as well. A storage/recovery warning is shown; changes remain blocked when storage is inaccessible.
+
+N1: Keep the raw failing inventory source separate from the current-key stale-write baseline. Raw recovery export now uses the actual failing legacy/current payload, or the preserved recovery slot, and refuses empty exports.
+
+Unchanged: approved interface, 22 rails, 9-sling capacity, FIFO, correction-only visible History, category workflows, storage schema.
+
+Testing status: JavaScript syntax and scripted failure-path tests only; verify on actual iPad/iPhone and desktop. This does not solve iOS file:// origin/storage limitations.
+
+--- Previous changelog ---
+Give&Take V1.3.1 — November 10, 2026
+
+Corrective release based on independent V1.3 review and operational feedback.
+- Visible History contains ONLY actual AUDIT CORRECTION events after initialization.
+- Routine GIVE and TAKE no longer generate History entries.
+- No-change audits do not generate History entries. No mandatory correction explanation.
+- Older non-correction History records are excluded from V1.3.1 active History; original V1.3 data is retained under the legacy storage key if available.
+- Recovery mode disables normal JSON export to prevent valid-looking empty backups.
+- Uses a separate storage key to protect against V1.2/V1.3 downgrades.
+- Preserves source before same-key migration; legacy key remains untouched.
+- Fixed-size recovery slots prevent unbounded recovery-copy accumulation.
+- Restore checks for stale data, preserves a pre-restore copy, and records restore metadata separately from visible audit History.
+- Export pre-restore copy in Setup; validates future schema versions.
+- Added storage-size notice; JSON cloning avoids structuredClone compatibility problems.
+
+LIMITATIONS
+- Browser-local single-device prototype. file:// storage behavior varies by browser.
+- Not synchronized or secure for production. LocalStorage is not guaranteed durable.
+- Same-key data from older versions is never automatically overwritten.
+- Duplicate/invalid legacy category names require manual review, not automatic guessing.
+- Pre-restore copy is a single slot and can be replaced by a later restore. Export it if needed.
+- History storage is not yet a durable audit database.
