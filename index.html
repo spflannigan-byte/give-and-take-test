@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#123b48"><title>Give&Take — Washroom</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#172e35;background:#f3f7f7}*{box-sizing:border-box}
+body{margin:0}header{background:#123b48;color:white;padding:18px max(16px,env(safe-area-inset-left));display:flex;align-items:center;justify-content:space-between;gap:12px}
+header strong{font-size:24px}header small{display:block;color:#b8d5d8}main{max-width:950px;margin:auto;padding:18px 14px 80px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}button,select,input{font:inherit}button{border:0;border-radius:10px;padding:13px 16px;cursor:pointer;font-weight:650;min-height:44px}
+nav button{background:#e0e9e9;color:#183940}.primary,nav button.active{background:#136e76;color:white}.danger{background:#a22d35;color:white}.secondary{background:#e0e9e9;color:#173d43}
+button:disabled{opacity:.4;cursor:not-allowed}.panel{background:white;border:1px solid #dbe5e6;border-radius:16px;padding:18px;margin-bottom:14px}
+h1{font-size:22px;margin:0 0 10px}h2{font-size:18px;margin:0 0 12px}p{line-height:1.45}.muted{color:#647980;font-size:13px}
+.rails{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px}.rail{background:white;border:1px solid #d5e3e4;border-radius:12px;padding:14px;text-align:left}
+.rail strong{display:block;font-size:20px;line-height:1.2}.rail .first-alias{display:block;font-size:15px;font-weight:650;color:#173d43;margin-top:7px;overflow-wrap:anywhere}.rail.empty .first-alias{color:#647980}.rail .rail-count{display:block;font-size:13px;color:#526c72;margin-top:5px}.meter{height:8px;background:#e6eeee;border-radius:10px;margin-top:9px;overflow:hidden}.fill{height:100%;background:#1a8b7e}
+.full .fill{background:#d18b30}.empty .fill{background:#c1cccd}.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+select,input{width:100%;border:1px solid #b8cacc;border-radius:10px;padding:13px;background:white;min-height:46px}
+label{font-weight:650;display:block;margin:12px 0 6px}.queue{list-style:none;padding:0;margin:10px 0}
+.queue li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #e7eeee}
+.pos{background:#e5eeee;min-width:34px;text-align:center;border-radius:8px;padding:10px 0;font-weight:700}
+.item{flex:1}.item small{display:block;color:#607980}.emptytext{color:#a0adaf}
+.notice{background:#fff5dd;border:1px solid #eedca9;padding:12px;border-radius:10px;font-size:13px;margin-bottom:14px}
+.success{background:#e7f5eb;border:1px solid #a5d4b6;padding:12px;border-radius:10px;margin-bottom:14px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+table{border-collapse:collapse;width:100%;font-size:13px}td,th{text-align:left;padding:10px 6px;border-bottom:1px solid #e3eded;vertical-align:top}
+@media(max-width:500px){header strong{font-size:21px}.panel{padding:14px}nav button{flex:1;padding:11px 8px}}
+.error{background:#ffe8e8;border:2px solid #bb3030;color:#6c1717;padding:14px;border-radius:10px;margin-bottom:14px;font-size:14px}
+</style></head><body><header><div><strong>Give&Take</strong><small>Washroom inventory · Device prototype</small></div><span id="status">V1.3.3 · LOCAL TEST</span></header><main>
+<div class="notice"><b>Device-only test.</b> Changes are saved in this browser, not shared with other devices. Do not use as the authoritative production inventory. No employee sign-in is required.</div>
+<nav id="nav"><button data-view="overview">Overview</button><button data-view="history">History</button><button data-view="settings">Setup</button></nav>
+<div id="flash" aria-live="polite"></div><div id="content"></div></main>
+<script>
+const APP_VERSION='V1.3.3', SCHEMA_VERSION=3, KEY='give-take-washroom-v131', LEGACY_KEY='give-take-washroom-v1';
+const INITIAL_CATEGORIES=[{"name": "WHITE APRON", "alias": "WHT AP"}, {"name": "BLACK APRON", "alias": "BLK AP"}, {"name": "COLOR APRON", "alias": "CLR AP"}, {"name": "WHITE TABLECLOTH", "alias": "WHT TC"}, {"name": "BLACK TABLECLOTH", "alias": "BLK TC"}, {"name": "WHITE NAPKIN", "alias": "WHT NAP"}, {"name": "BISTRO NAPKIN", "alias": "BISTRO NAP"}, {"name": "BLACK NAPKIN", "alias": "BLK NAP"}, {"name": "NAVY NAPKIN", "alias": "NVY NAP"}, {"name": "GREEN NAPKIN", "alias": "GR NAP"}, {"name": "RED NAPKIN", "alias": "RED NAP"}, {"name": "BURGUNDY NAPKIN", "alias": "BURG NAP"}, {"name": "WET MOP", "alias": "WET MOP"}, {"name": "DUST MOP", "alias": "DUST MOP"}, {"name": "BAR TOWEL", "alias": "BAR TWL"}, {"name": "SWIPE TOWEL", "alias": "SWP TWL"}, {"name": "MICROFIBER ORAND/GREEN", "alias": "MICRO O/G"}, {"name": "MICROFIBER PURPLE", "alias": "MICRO PURPLE"}, {"name": "RED WIPER", "alias": "RED WIPE"}, {"name": "BLEACH WIPER", "alias": "WHT WIPE"}, {"name": "MATS", "alias": "MATS"}, {"name": "RUBBER MATS", "alias": "RB MATS"}];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const normalize=s=>String(s??'').trim().replace(/\s+/g,' ').toUpperCase();
+const idFor=n=>'c_'+String(n).padStart(3,'0');
+function defaults(){return {schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,rails:Array.from({length:22},()=>[]),categories:INITIAL_CATEGORIES.map((c,i)=>({...c,id:idFor(i+1)})),history:[],recoveryEvents:[],initialized:false,nextCategoryNumber:INITIAL_CATEGORIES.length+1}}
+let state,view='overview',selected=1,edit=false,draft=[],categoryEdit=null,storageFault='',loadFault='',readOnly=false,seenRaw=null,recoverySource=null;
+function rawRead(){return localStorage.getItem(KEY)}
+function safeRead(key){try{return localStorage.getItem(key)}catch(e){return null}}
+const RECOVERY_KEY=KEY+'.recovery', PRE_RESTORE_KEY=KEY+'.pre-restore', PRE_MIGRATION_KEY=KEY+'.pre-migration';
+function preserveRaw(raw,reason){
+ if(raw===null||raw===undefined)return null;
+ const k=reason==='pre-restore'?PRE_RESTORE_KEY:reason==='pre-migration'?PRE_MIGRATION_KEY:RECOVERY_KEY;
+ try{
+  if(localStorage.getItem(k)===raw)return k;
+  // One copy per purpose. Never accumulate timestamped full copies.
+  localStorage.setItem(k,raw);return k;
+ }catch(e){return null}
+}
+function failLoad(message,raw){
+ loadFault=message;readOnly=true;state=defaults();recoverySource=raw;
+ const key=raw?preserveRaw(raw,'recovery'):null;
+ if(key)loadFault+=' Original data was preserved in recovery storage.';
+ else if(raw)loadFault+=' Could not copy the original; do not clear browser storage. Use Export raw recovery data.';
+}
+function checkAndMigrate(input){
+ if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Invalid inventory object');
+ if(!Array.isArray(input.rails)||input.rails.length!==22)throw Error('Expected exactly 22 rails');
+ if(input.rails.some(r=>!Array.isArray(r)||r.length>9))throw Error('Invalid rail contents or capacity');
+ if(input.schemaVersion!==undefined&&![1,2,3].includes(input.schemaVersion))throw Error('Unsupported backup schema version');
+ let categories=Array.isArray(input.categories)?input.categories:INITIAL_CATEGORIES.map(c=>({...c}));
+ let history=Array.isArray(input.history)?input.history:[];
+ let recoveryEvents=Array.isArray(input.recoveryEvents)?input.recoveryEvents.slice(-30):[];
+ if(categories.some(c=>!c||typeof c.name!=='string'||typeof c.alias!=='string'))throw Error('Invalid categories');
+ let next=1,used=new Set(),aliasMap=new Map(),nameSet=new Set();
+ categories=categories.map(c=>{
+  const name=normalize(c.name),alias=normalize(c.alias);
+  if(!name||!alias||alias.includes(','))throw Error('Invalid category name or alias');
+  if(aliasMap.has(alias)||nameSet.has(name))throw Error('Duplicate category alias or name');
+  nameSet.add(name);
+  let id=typeof c.id==='string'&&/^c_\d{1,9}$/.test(c.id)?c.id:null;
+  if(id){if(used.has(id))throw Error('Duplicate category ID');next=Math.max(next,Number(id.slice(2))+1)}
+  used.add(id||'');let out={id,name,alias};aliasMap.set(alias,out);return out;
+ });
+ used.clear();categories.forEach(c=>{if(!c.id){while(used.has(idFor(next))||categories.some(x=>x.id===idFor(next)))next++;c.id=idFor(next++);}used.add(c.id)});
+ let byId=new Map(categories.map(c=>[c.id,c]));
+ const resolve=x=>{
+  if(typeof x!=='string')throw Error('Invalid sling reference');
+  if(byId.has(x))return x;
+  const c=aliasMap.get(normalize(x));if(!c)throw Error('Unknown product in rail: '+x);
+  return c.id;
+ };
+ const rails=input.rails.map(r=>r.map(resolve));
+ const cleanedHistory=history.filter(h=>h&&h.type==='AUDIT CORRECTION').map(h=>{
+  if(!h||typeof h!=='object'||!Array.isArray(h.before)||!Array.isArray(h.after))throw Error('Invalid history entry');
+  const clean=a=>a.map(x=>{
+   if(typeof x==='string')return {id:byId.has(x)?x:(aliasMap.get(normalize(x))?.id||null),alias:byId.get(x)?.alias||String(x),name:byId.get(x)?.name||aliasMap.get(normalize(x))?.name||String(x)};
+   if(x&&typeof x==='object'&&typeof x.alias==='string')return {id:typeof x.id==='string'?x.id:null,alias:String(x.alias),name:String(x.name||x.alias)};
+   throw Error('Invalid history snapshot');
+  });
+  return {time:typeof h.time==='string'?h.time:new Date().toISOString(),type:String(h.type||'UNKNOWN'),rail:h.rail??'—',before:clean(h.before),after:clean(h.after)};
+ });
+ return {schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,rails,categories,history:cleanedHistory,recoveryEvents,initialized:input.initialized===true,nextCategoryNumber:Math.max(next,Number(input.nextCategoryNumber)||1)};
+}
+function startup(){
+ let raw=null;
+ try{
+  // Never allow V1.2 to rewrite V1.3.3 data: the new format has its own key.
+  const existing=rawRead();
+  const legacy=existing===null?localStorage.getItem(LEGACY_KEY):null;
+  raw=existing===null?legacy:existing;
+  seenRaw=existing;
+  if(raw===null){state=defaults();return}
+  const migrated=checkAndMigrate(JSON.parse(raw));
+  const output=JSON.stringify(migrated);
+  if(existing===null||output!==raw){
+   // Legacy key is left intact. For same-key migration, preserve exact source first.
+   if(existing!==null&&!preserveRaw(raw,'pre-migration'))throw Error('Cannot preserve pre-migration data; storage may be full');
+   localStorage.setItem(KEY,output);seenRaw=output;
+  }
+  state=migrated;
+ }catch(e){failLoad('Stored inventory could not be loaded safely: '+e.message,raw);seenRaw=safeRead(KEY)}
+}
+startup();
+function snapshot(ids,catalog=state.categories){return ids.map(id=>{let c=catalog.find(c=>c.id===id);return {id,alias:c?.alias||'[UNKNOWN]',name:c?.name||'[UNKNOWN PRODUCT]'}})}
+function history(type,rail,before=[],after=[],catalog=state.categories){return {time:new Date().toISOString(),type,rail,before:snapshot(before,catalog),after:snapshot(after,catalog)}}
+function mutate(fn){
+ if(readOnly){alert('Inventory is in recovery/read-only mode. Restore a valid backup before editing.');return false}
+ try{
+  const current=rawRead();
+  if(current!==seenRaw){storageFault='Inventory changed in another tab or window. No changes were saved. Reload this page before continuing.';render();return false}
+  const next=JSON.parse(JSON.stringify(state));const result=fn(next);
+  if(result===false)return false;
+  next.appVersion=APP_VERSION;next.schemaVersion=SCHEMA_VERSION;
+  const validated=checkAndMigrate(next);const raw=JSON.stringify(validated);
+  localStorage.setItem(KEY,raw);seenRaw=raw;state=validated;storageFault='';return true;
+ }catch(e){storageFault='Save failed: '+e.message+'. Your change was NOT saved. Export your backup and check browser storage.';render();return false}
+}
+function category(id){return state.categories.find(c=>c.id===id)}
+function display(id){return category(id)?.name||'[UNKNOWN PRODUCT]'}
+function alias(id){return category(id)?.alias||'[UNKNOWN]'}
+function flash(s){$('flash').innerHTML='<div class="success">'+esc(s)+'</div>';setTimeout(()=>{if($('flash'))$('flash').innerHTML=''},4000)}
+function switchView(v){view=v;edit=false;render()}
+function openRail(n){selected=n;switchView('rail')}
+function meter(n){return `<div class="meter"><div class="fill" style="width:${n/9*100}%"></div></div>`}
+function banner(){
+ let a='';if(loadFault)a+=`<div class="error"><b>RECOVERY MODE:</b> ${esc(loadFault)} <button id="rawExport" class="secondary">Export raw recovery data</button></div>`;
+ if(!readOnly){try{const bytes=(rawRead()||'').length;if(bytes>2000000)a+='<div class="notice"><b>Storage notice:</b> Local inventory is growing large. Export a backup and plan cloud storage.</div>'}catch(e){}}
+ if(storageFault)a+=`<div class="error"><b>STORAGE WARNING:</b> ${esc(storageFault)}</div>`;
+ return a;
+}
+function render(){
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===(view==='rail'?'overview':view)));
+ const el=$('content');let html=banner();
+ if(view==='overview'){
+  let total=state.rails.reduce((n,r)=>n+r.length,0);
+  html+=`<section class="panel"><h1>All 22 rails</h1><p class="muted">${total} / 198 sling positions occupied · Rail 1 nearest soil lift · Rail 22 nearest washroom</p><div class="rails">${state.rails.map((r,i)=>`<button class="rail ${r.length===9?'full':r.length===0?'empty':''}" data-rail="${i+1}"><strong>Rail ${i+1}</strong><span class="first-alias">${r.length?esc(alias(r[0])):"EMPTY"}</span><span class="rail-count">${r.length} / 9 slings</span>${meter(r.length)}</button>`).join('')}</div></section>`;
+ }else if(view==='rail'){
+  const q=state.rails[selected-1];
+  html+=`<section class="panel"><div class="row"><h1 style="font-size:30px">Rail ${selected}</h1><strong>${q.length} / 9 slings</strong></div><p class="muted">Position 1 is next to wash · ${9-q.length} position${9-q.length===1?'':'s'} remaining</p>
+  ${edit?`<h2>${state.initialized?'Correct sling order':'Initialize rail inventory'}</h2><p class="muted">Choose the actual physical sequence. Empty positions must remain at the end.</p><div id="editor">${Array.from({length:9},(_,i)=>`<label for="slot${i}">Position ${i+1}</label><select id="slot${i}" data-slot="${i}"><option value="">— Empty —</option>${state.categories.map(c=>`<option value="${esc(c.id)}" ${draft[i]===c.id?'selected':''}>${esc(c.alias)} — ${esc(c.name)}</option>`).join('')}</select>`).join('')}</div><div class="actions"><button class="primary" id="saveEdit">Save sequence</button><button class="secondary" id="cancelEdit">Cancel</button></div>`:
+  `<ol class="queue">${q.map((id,i)=>`<li><span class="pos">${i+1}</span><span class="item"><b>${esc(alias(id))}</b><small>${esc(display(id))}</small></span></li>`).join('')||'<li class="muted">Rail empty — 9 positions remaining</li>'}</ol><div class="actions"><button class="primary" id="give" ${q.length===9||readOnly?'disabled':''}>+ GIVE</button><button class="primary" id="take" ${!q.length||readOnly?'disabled':''}>− TAKE</button><button class="secondary" id="edit" ${readOnly?'disabled':''}>${state.initialized?'Audit / Correct':'Initialize / Edit'}</button></div><div id="operation"></div>`}</section>`;
+ }else if(view==='history'){
+  html+=`<section class="panel"><div class="row"><h1>Audit / Correction history</h1><button class="secondary" id="export" ${readOnly?'disabled':''}>Export JSON</button></div><p class="muted">Only actual audit corrections appear here. Routine GIVE / TAKE movements are not listed. Recorded on this device only.</p><div style="overflow:auto"><table><thead><tr><th>Time</th><th>Action</th><th>Rail</th><th>Before → After</th></tr></thead><tbody>${state.history.slice(0,300).map(h=>`<tr><td>${esc(new Date(h.time).toLocaleString())}</td><td>${esc(h.type)}</td><td>${esc(h.rail)}</td><td>${esc(h.before.map(x=>x.alias).join(', ')||'Empty')} → ${esc(h.after.map(x=>x.alias).join(', ')||'Empty')}</td></tr>`).join('')||'<tr><td colspan="4">No changes yet</td></tr>'}</tbody></table></div></section>`;
+ }else{
+  html+=`<section class="panel"><h1>Setup and categories</h1><p>Start by selecting each rail and entering its actual sling order. Existing rails do not need to be empty.</p><p><b>Initial inventory:</b> ${state.initialized?'Marked initialized':'Not yet marked initialized'}</p><div class="actions"><button class="primary" id="markInit" ${readOnly?'disabled':''}>Mark initial inventory complete</button><button class="secondary" id="export" ${readOnly?'disabled':''}>Export backup JSON</button><button class="secondary" id="restore">Restore backup JSON</button><button class="secondary" id="preRestoreExport">Export pre-restore copy</button></div><input id="restoreFile" type="file" accept=".json,application/json" style="display:none"><div id="restorePreview"></div><label for="catname">New product name</label><input id="catname" placeholder="Product name"><label for="catalias">Short display alias</label><input id="catalias" placeholder="Alias"><button class="primary" id="addCategory" style="margin-top:12px" ${readOnly?'disabled':''}>Add category</button><h2 style="margin-top:20px">Product catalog (${state.categories.length})</h2><div style="overflow:auto"><table>${state.categories.map((c,i)=>`<tr><td><b>${esc(c.alias)}</b></td><td>${esc(c.name)}</td><td><button class="secondary" data-cat-edit="${i}" ${readOnly?'disabled':''}>Edit</button></td></tr>`).join('')}</table></div><div id="categoryEditor"></div><p class="muted">Manager/Admin password protection is planned for the shared cloud version. This local prototype does not yet provide secure access control. Categories with slings currently on rails cannot be deleted. Recovery actions are tracked separately from audit corrections.</p></section>`;
+ }
+ el.innerHTML=html;bind();
+}
+function downloadJSON(data,filename){
+ const blob=new Blob([typeof data==='string'?data:JSON.stringify(data,null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+ // iPad Files/Safari: if download is blocked, the user can use Share from the opened file.
+}
+function bind(){
+ document.querySelectorAll('[data-rail]').forEach(b=>b.onclick=()=>openRail(Number(b.dataset.rail)));
+ if($('preRestoreExport')){const b=$('preRestoreExport');b.disabled=!safeRead(PRE_RESTORE_KEY);b.onclick=()=>{const data=safeRead(PRE_RESTORE_KEY);if(!data)return alert('Pre-restore data is unavailable.');downloadJSON(data,'give-and-take-pre-restore-'+Date.now()+'.json')}}
+ if($('rawExport'))$('rawExport').onclick=()=>{const data=recoverySource??safeRead(RECOVERY_KEY);if(!data){alert('No raw recovery data is available to export. Do not clear browser storage.');return}downloadJSON(data,'give-and-take-raw-recovery-'+Date.now()+'.json')};
+ if($('edit'))$('edit').onclick=()=>{draft=[...state.rails[selected-1]];edit=true;render()};
+ if($('cancelEdit'))$('cancelEdit').onclick=()=>{edit=false;render()};
+ document.querySelectorAll('[data-slot]').forEach(e=>e.onchange=ev=>{draft[Number(ev.target.dataset.slot)]=ev.target.value});
+ if($('saveEdit'))$('saveEdit').onclick=()=>{
+  const a=Array.from({length:9},(_,i)=>draft[i]||'');let gap=false;
+  for(const x of a){if(!x)gap=true;else if(gap){alert('Empty positions must be at the end. Remove gaps before saving.');return}}
+  const after=a.filter(Boolean),before=[...state.rails[selected-1]];
+  if(JSON.stringify(before)===JSON.stringify(after)){edit=false;render();flash('No changes needed.');return}
+  if(mutate(s=>{s.rails[selected-1]=after;if(s.initialized)s.history.unshift(history('AUDIT CORRECTION',selected,before,after,s.categories))})){edit=false;render();flash('Rail '+selected+' saved.')}
+ };
+ if($('give'))$('give').onclick=()=>{
+  const q=state.rails[selected-1];if(q.length>=9)return;
+  $('operation').innerHTML=`${!state.initialized?'<div class="notice">Initial inventory has not been marked complete. Verify the rail before recording movement.</div>':''}<label for="product">Sling product category</label><select id="product"><option value="">Select product</option>${state.categories.map(c=>`<option value="${esc(c.id)}">${esc(c.alias)} — ${esc(c.name)}</option>`).join('')}</select><div class="actions"><button class="primary" id="confirmGive">Confirm GIVE</button><button class="secondary" id="cancelOp">Cancel</button></div>`;
+  $('confirmGive').onclick=()=>{const id=$('product').value;if(!id)return alert('Select a product');const before=[...q];if(mutate(s=>{if(s.rails[selected-1].length>=9)throw Error('Rail full');s.rails[selected-1].push(id);})){render();flash(alias(id)+' added to Rail '+selected)}};
+  $('cancelOp').onclick=()=>render();
+ };
+ if($('take'))$('take').onclick=()=>{
+  const q=state.rails[selected-1];if(!q.length)return;const expected=q[0];
+  $('operation').innerHTML=`<div class="notice">Next sling: <b>${esc(alias(expected))}</b> — ${esc(display(expected))}. Confirm that the physical sling matches before removal.</div><div class="actions"><button class="primary" id="confirmTake">Confirm TAKE</button><button class="secondary" id="cancelOp">Cancel</button></div>`;
+  $('confirmTake').onclick=()=>{const before=[...q];if(mutate(s=>{if(s.rails[selected-1][0]!==expected)throw Error('Front sling changed; reload and check rail');s.rails[selected-1].shift();})){render();flash(alias(expected)+' removed from Rail '+selected)}};
+  $('cancelOp').onclick=()=>render();
+ };
+ document.querySelectorAll('[data-cat-edit]').forEach(b=>b.onclick=()=>{
+  const idx=Number(b.dataset.catEdit),c=state.categories[idx];categoryEdit=c.id;
+  $('categoryEditor').innerHTML=`<section class="panel" style="margin-top:16px;background:#f4f8f8"><h2>Edit category</h2><label for="editName">Full product name</label><input id="editName" value="${esc(c.name)}"><label for="editAlias">Display alias</label><input id="editAlias" value="${esc(c.alias)}"><div class="actions"><button class="primary" id="saveCategory">Save changes</button><button class="danger" id="deleteCategory">Delete category</button><button class="secondary" id="cancelCategory">Cancel</button></div></section>`;
+  $('cancelCategory').onclick=()=>{$('categoryEditor').innerHTML='';categoryEdit=null};
+  $('saveCategory').onclick=()=>{
+   const name=normalize($('editName').value),short=normalize($('editAlias').value);
+   if(!name||!short||short.includes(','))return alert('Enter a name and alias (no commas).');
+   if(state.categories.some(x=>x.id!==c.id&&(x.alias===short||x.name===name)))return alert('Product name or alias already exists.');
+   if(c.name===name&&c.alias===short)return alert('No changes made.');
+   if(!confirm('Save category changes from '+c.alias+' to '+short+'?'))return;
+   if(mutate(s=>{const x=s.categories.find(x=>x.id===c.id);x.name=name;x.alias=short;})){categoryEdit=null;render();flash('Category updated; active inventory references preserved.')}
+  };
+  $('deleteCategory').onclick=()=>{
+   const count=state.rails.reduce((n,r)=>n+r.filter(x=>x===c.id).length,0);
+   if(count)return alert('Cannot delete: '+count+' sling(s) use this category.');
+   if(!confirm('Permanently delete '+c.name+' ('+c.alias+')? History is retained.'))return;
+   if(mutate(s=>{s.categories=s.categories.filter(x=>x.id!==c.id);})){categoryEdit=null;render();flash('Category deleted.')}
+  };
+ });
+ if($('markInit'))$('markInit').onclick=()=>{if(!state.initialized&&confirm('Mark initial inventory entry complete? This does not verify physical rails.')){if(mutate(s=>{s.initialized=true;})){render();flash('Initialization marked complete.')}}};
+ if($('addCategory'))$('addCategory').onclick=()=>{
+  const name=normalize($('catname').value),short=normalize($('catalias').value);
+  if(!name||!short||short.includes(','))return alert('Enter name and alias (no commas).');
+  if(state.categories.some(c=>c.alias===short||c.name===name))return alert('Name or alias already exists.');
+  if(mutate(s=>{const id=idFor(s.nextCategoryNumber++);s.categories.push({id,name,alias:short});})){render();flash('Category added.')}
+ };
+ if($('export'))$('export').onclick=()=>{if(readOnly)return alert('Cannot export normal backup while inventory is in recovery mode. Export raw recovery data instead.');downloadJSON({exportedAt:new Date().toISOString(),appVersion:APP_VERSION,schemaVersion:SCHEMA_VERSION,inventory:state},'give-and-take-V1.3.3-backup-'+new Date().toISOString().slice(0,10)+'.json');};
+ if($('restore'))$('restore').onclick=()=>$('restoreFile').click();
+ if($('restoreFile'))$('restoreFile').onchange=async ev=>{
+  const file=ev.target.files?.[0];if(!file)return;
+  try{
+   if(file.size>10*1024*1024)throw Error('Backup file too large');
+   const input=JSON.parse(await file.text());
+   if(input&&input.inventory&&Number(input.schemaVersion)>SCHEMA_VERSION)throw Error('Backup was created by a newer unsupported schema');
+   const candidate=checkAndMigrate(input.inventory||input);
+   const total=candidate.rails.reduce((n,r)=>n+r.length,0);
+   const date=input.exportedAt||candidate.history[0]?.time||'Not recorded';
+   $('restorePreview').innerHTML=`<div class="notice"><b>Backup ready to restore</b><p>Backup date: ${esc(date)}<br>Rails: ${candidate.rails.length}<br>Slings: ${total}<br>Categories: ${candidate.categories.length}</p><p>This replaces the current inventory on this device.</p><button class="danger" id="confirmRestore">Confirm restore</button> <button class="secondary" id="cancelRestore">Cancel</button></div>`;
+   $('cancelRestore').onclick=()=>{$('restorePreview').innerHTML=''};
+   $('confirmRestore').onclick=()=>{
+    if(!confirm('Replace current inventory with this backup? The previous state will be preserved if storage allows.'))return;
+    try{
+     const existing=rawRead();
+     if(existing!==seenRaw)throw Error('Inventory changed since this page loaded. Reload before restoring.');
+     if(existing!==null&&!preserveRaw(existing,'pre-restore'))throw Error('Could not preserve pre-restore inventory. Free browser storage or export a backup first.');
+     const restored=checkAndMigrate(candidate);
+     restored.recoveryEvents.push({time:new Date().toISOString(),action:'RESTORE',sourceDate:String(date),previousSlings:state.rails.reduce((n,r)=>n+r.length,0),restoredSlings:total,previousHistoryCount:state.history.length});
+     restored.recoveryEvents=restored.recoveryEvents.slice(-30);
+     const raw=JSON.stringify(restored);
+     localStorage.setItem(KEY,raw);seenRaw=raw;state=restored;readOnly=false;loadFault='';recoverySource=null;storageFault='';render();flash('Backup restored successfully. Previous inventory copy is available in Setup.');
+    }catch(e){storageFault='Restore failed: '+e.message+'. Existing inventory was not intentionally changed.';render()}
+   };
+  }catch(e){alert('Invalid backup: '+e.message)}finally{ev.target.value=''}
+ };
+}
+window.addEventListener('storage',ev=>{if(ev.key===KEY&&ev.newValue!==seenRaw){storageFault='Inventory changed in another tab or window. Reload this page before making changes.';render()}});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+render();
+</script></body></html>
