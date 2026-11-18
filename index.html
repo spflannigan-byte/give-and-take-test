@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#123b48"><title>Give&Take — Washroom</title>
+<meta name="theme-color" content="#123b48"><title>Give&Take — FIFO Soil Inventory</title>
 <style>
 :root{font-family:system-ui,-apple-system,sans-serif;color:#172e35;background:#f3f7f7}*{box-sizing:border-box}
 body{margin:0}header{background:#123b48;color:white;padding:18px max(16px,env(safe-area-inset-left));display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -23,18 +23,19 @@ label{font-weight:650;display:block;margin:12px 0 6px}.queue{list-style:none;pad
 table{border-collapse:collapse;width:100%;font-size:13px}td,th{text-align:left;padding:10px 6px;border-bottom:1px solid #e3eded;vertical-align:top}
 @media(max-width:500px){header strong{font-size:21px}.panel{padding:14px}nav button{flex:1;padding:11px 8px}}
 .error{background:#ffe8e8;border:2px solid #bb3030;color:#6c1717;padding:14px;border-radius:10px;margin-bottom:14px;font-size:14px}
-</style></head><body><header><div><strong>Give&Take</strong><small>Washroom inventory · Device prototype</small></div><span id="status">V1.3.3 · LOCAL TEST</span></header><main>
+</style></head><body><header><div><strong>Give&Take</strong><small>FIFO Soil Inventory · Device prototype</small></div><span id="status">V1.3.4 · VISUAL TEST</span></header><main>
 <div class="notice"><b>Device-only test.</b> Changes are saved in this browser, not shared with other devices. Do not use as the authoritative production inventory. No employee sign-in is required.</div>
-<nav id="nav"><button data-view="overview">Overview</button><button data-view="history">History</button><button data-view="settings">Setup</button></nav>
+<nav id="nav"><button data-view="overview">Overview</button><button data-view="dashboard">Dashboard</button><button data-view="history">History</button><button data-view="settings">Setup</button></nav>
 <div id="flash" aria-live="polite"></div><div id="content"></div></main>
 <script>
-const APP_VERSION='V1.3.3', SCHEMA_VERSION=3, KEY='give-take-washroom-v131', LEGACY_KEY='give-take-washroom-v1';
+const APP_VERSION='V1.3.4', SCHEMA_VERSION=3, KEY='give-take-washroom-v131', LEGACY_KEY='give-take-washroom-v1';
 const INITIAL_CATEGORIES=[{"name": "WHITE APRON", "alias": "WHT AP"}, {"name": "BLACK APRON", "alias": "BLK AP"}, {"name": "COLOR APRON", "alias": "CLR AP"}, {"name": "WHITE TABLECLOTH", "alias": "WHT TC"}, {"name": "BLACK TABLECLOTH", "alias": "BLK TC"}, {"name": "WHITE NAPKIN", "alias": "WHT NAP"}, {"name": "BISTRO NAPKIN", "alias": "BISTRO NAP"}, {"name": "BLACK NAPKIN", "alias": "BLK NAP"}, {"name": "NAVY NAPKIN", "alias": "NVY NAP"}, {"name": "GREEN NAPKIN", "alias": "GR NAP"}, {"name": "RED NAPKIN", "alias": "RED NAP"}, {"name": "BURGUNDY NAPKIN", "alias": "BURG NAP"}, {"name": "WET MOP", "alias": "WET MOP"}, {"name": "DUST MOP", "alias": "DUST MOP"}, {"name": "BAR TOWEL", "alias": "BAR TWL"}, {"name": "SWIPE TOWEL", "alias": "SWP TWL"}, {"name": "MICROFIBER ORAND/GREEN", "alias": "MICRO O/G"}, {"name": "MICROFIBER PURPLE", "alias": "MICRO PURPLE"}, {"name": "RED WIPER", "alias": "RED WIPE"}, {"name": "BLEACH WIPER", "alias": "WHT WIPE"}, {"name": "MATS", "alias": "MATS"}, {"name": "RUBBER MATS", "alias": "RB MATS"}];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalize=s=>String(s??'').trim().replace(/\s+/g,' ').toUpperCase();
 const idFor=n=>'c_'+String(n).padStart(3,'0');
 function defaults(){return {schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,rails:Array.from({length:22},()=>[]),categories:INITIAL_CATEGORIES.map((c,i)=>({...c,id:idFor(i+1)})),history:[],recoveryEvents:[],initialized:false,nextCategoryNumber:INITIAL_CATEGORIES.length+1}}
+let previewWeights={},previewDates={};
 let state,view='overview',selected=1,edit=false,draft=[],categoryEdit=null,storageFault='',loadFault='',readOnly=false,seenRaw=null,recoverySource=null;
 function rawRead(){return localStorage.getItem(KEY)}
 function safeRead(key){try{return localStorage.getItem(key)}catch(e){return null}}
@@ -143,14 +144,20 @@ function banner(){
 function render(){
  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===(view==='rail'?'overview':view)));
  const el=$('content');let html=banner();
- if(view==='overview'){
+ if(view==='dashboard'){
+ const entries=state.rails.flatMap((r,i)=>r.map((id,j)=>({id,rail:i+1,weight:previewWeights[i+'-'+j]??80,date:previewDates[i+'-'+j]??null})));
+ const total=entries.reduce((n,x)=>n+x.weight,0);
+ const oldest=entries.filter(x=>x.date).sort((a,b)=>a.date.localeCompare(b.date))[0];
+ const grouped=state.categories.map(c=>({c,items:entries.filter(e=>e.id===c.id)})).filter(x=>x.items.length);
+ html+=`<section class="panel"><h1>Dashboard</h1><p class="muted">Read-only · Available to all employees · Local visual test, not live inventory.</p><div class="rails" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))"><div class="panel"><h2>Total estimated weight</h2><strong style="font-size:27px">${total.toLocaleString()} lbs</strong><p class="muted">${entries.length} slings</p></div><div class="panel"><h2>Oldest recorded sling</h2><strong>${oldest?esc(new Date(oldest.date).toLocaleString()):'Not recorded'}</strong><p class="muted">${oldest?'Rail '+oldest.rail:'No placement dates available'}</p></div></div><h2>Estimated weight by product category</h2><table><thead><tr><th>Product</th><th>Slings</th><th>Weight</th></tr></thead><tbody>${grouped.map(x=>`<tr><td>${esc(x.c.name)}</td><td>${x.items.length}</td><td>${x.items.reduce((n,e)=>n+e.weight,0).toLocaleString()} lbs</td></tr>`).join('')||'<tr><td colspan="3">No slings</td></tr>'}</tbody></table><p class="muted">80 lbs or less counts as 80 lbs. Existing slings without weights are assumed 80 lbs for this visual only. Preview weight and date details reset on reload.</p></section>`;
+ }else if(view==='overview'){
   let total=state.rails.reduce((n,r)=>n+r.length,0);
   html+=`<section class="panel"><h1>All 22 rails</h1><p class="muted">${total} / 198 sling positions occupied · Rail 1 nearest soil lift · Rail 22 nearest washroom</p><div class="rails">${state.rails.map((r,i)=>`<button class="rail ${r.length===9?'full':r.length===0?'empty':''}" data-rail="${i+1}"><strong>Rail ${i+1}</strong><span class="first-alias">${r.length?esc(alias(r[0])):"EMPTY"}</span><span class="rail-count">${r.length} / 9 slings</span>${meter(r.length)}</button>`).join('')}</div></section>`;
  }else if(view==='rail'){
   const q=state.rails[selected-1];
   html+=`<section class="panel"><div class="row"><h1 style="font-size:30px">Rail ${selected}</h1><strong>${q.length} / 9 slings</strong></div><p class="muted">Position 1 is next to wash · ${9-q.length} position${9-q.length===1?'':'s'} remaining</p>
   ${edit?`<h2>${state.initialized?'Correct sling order':'Initialize rail inventory'}</h2><p class="muted">Choose the actual physical sequence. Empty positions must remain at the end.</p><div id="editor">${Array.from({length:9},(_,i)=>`<label for="slot${i}">Position ${i+1}</label><select id="slot${i}" data-slot="${i}"><option value="">— Empty —</option>${state.categories.map(c=>`<option value="${esc(c.id)}" ${draft[i]===c.id?'selected':''}>${esc(c.alias)} — ${esc(c.name)}</option>`).join('')}</select>`).join('')}</div><div class="actions"><button class="primary" id="saveEdit">Save sequence</button><button class="secondary" id="cancelEdit">Cancel</button></div>`:
-  `<ol class="queue">${q.map((id,i)=>`<li><span class="pos">${i+1}</span><span class="item"><b>${esc(alias(id))}</b><small>${esc(display(id))}</small></span></li>`).join('')||'<li class="muted">Rail empty — 9 positions remaining</li>'}</ol><div class="actions"><button class="primary" id="give" ${q.length===9||readOnly?'disabled':''}>+ GIVE</button><button class="primary" id="take" ${!q.length||readOnly?'disabled':''}>− TAKE</button><button class="secondary" id="edit" ${readOnly?'disabled':''}>${state.initialized?'Audit / Correct':'Initialize / Edit'}</button></div><div id="operation"></div>`}</section>`;
+  `<ol class="queue">${q.map((id,i)=>`<li><span class="pos">${i+1}</span><span class="item"><b>${esc(alias(id))}</b><small>${esc(display(id))} · ${previewWeights[(selected-1)+'-'+i]??'≤80'} lbs · ${previewDates[(selected-1)+'-'+i]?new Date(previewDates[(selected-1)+'-'+i]).toLocaleString():'Date not recorded'}</small></span></li>`).join('')||'<li class="muted">Rail empty — 9 positions remaining</li>'}</ol><div class="actions"><button class="primary" id="give" ${q.length===9||readOnly?'disabled':''}>+ GIVE</button><button class="primary" id="take" ${!q.length||readOnly?'disabled':''}>− TAKE</button><button class="secondary" id="edit" ${readOnly?'disabled':''}>${state.initialized?'Audit / Correct':'Initialize / Edit'}</button></div><div id="operation"></div>`}</section>`;
  }else if(view==='history'){
   html+=`<section class="panel"><div class="row"><h1>Audit / Correction history</h1><button class="secondary" id="export" ${readOnly?'disabled':''}>Export JSON</button></div><p class="muted">Only actual audit corrections appear here. Routine GIVE / TAKE movements are not listed. Recorded on this device only.</p><div style="overflow:auto"><table><thead><tr><th>Time</th><th>Action</th><th>Rail</th><th>Before → After</th></tr></thead><tbody>${state.history.slice(0,300).map(h=>`<tr><td>${esc(new Date(h.time).toLocaleString())}</td><td>${esc(h.type)}</td><td>${esc(h.rail)}</td><td>${esc(h.before.map(x=>x.alias).join(', ')||'Empty')} → ${esc(h.after.map(x=>x.alias).join(', ')||'Empty')}</td></tr>`).join('')||'<tr><td colspan="4">No changes yet</td></tr>'}</tbody></table></div></section>`;
  }else{
@@ -179,14 +186,14 @@ function bind(){
  };
  if($('give'))$('give').onclick=()=>{
   const q=state.rails[selected-1];if(q.length>=9)return;
-  $('operation').innerHTML=`${!state.initialized?'<div class="notice">Initial inventory has not been marked complete. Verify the rail before recording movement.</div>':''}<label for="product">Sling product category</label><select id="product"><option value="">Select product</option>${state.categories.map(c=>`<option value="${esc(c.id)}">${esc(c.alias)} — ${esc(c.name)}</option>`).join('')}</select><div class="actions"><button class="primary" id="confirmGive">Confirm GIVE</button><button class="secondary" id="cancelOp">Cancel</button></div>`;
-  $('confirmGive').onclick=()=>{const id=$('product').value;if(!id)return alert('Select a product');const before=[...q];if(mutate(s=>{if(s.rails[selected-1].length>=9)throw Error('Rail full');s.rails[selected-1].push(id);})){render();flash(alias(id)+' added to Rail '+selected)}};
+  $('operation').innerHTML=`${!state.initialized?'<div class="notice">Initial inventory has not been marked complete. Verify the rail before recording movement.</div>':''}<label for="product">Select Product</label><select id="product"><option value="">Select product</option>${state.categories.map(c=>`<option value="${esc(c.id)}">${esc(c.alias)} — ${esc(c.name)}</option>`).join('')}</select><label for="slingWeight">Select Sling Weight</label><select id="slingWeight"><option value="80">80 lbs or less</option>${[100,125,150,175,200,225,250,275,300].map(w=>`<option value="${w}">${w} lbs</option>`).join('')}</select><p class="muted">Placement date recorded automatically when GIVE is confirmed (visual test).</p><div class="actions"><button class="primary" id="confirmGive">Confirm GIVE</button><button class="secondary" id="cancelOp">Cancel</button></div>`;
+  $('confirmGive').onclick=()=>{const id=$('product').value;if(!id)return alert('Select a product');const weight=Number($('slingWeight').value);const slot=q.length;if(mutate(s=>{if(s.rails[selected-1].length>=9)throw Error('Rail full');s.rails[selected-1].push(id);})){previewWeights[(selected-1)+'-'+slot]=weight;previewDates[(selected-1)+'-'+slot]=new Date().toISOString();render();flash(alias(id)+' · '+weight+' lbs added to Rail '+selected)}};
   $('cancelOp').onclick=()=>render();
  };
  if($('take'))$('take').onclick=()=>{
   const q=state.rails[selected-1];if(!q.length)return;const expected=q[0];
   $('operation').innerHTML=`<div class="notice">Next sling: <b>${esc(alias(expected))}</b> — ${esc(display(expected))}. Confirm that the physical sling matches before removal.</div><div class="actions"><button class="primary" id="confirmTake">Confirm TAKE</button><button class="secondary" id="cancelOp">Cancel</button></div>`;
-  $('confirmTake').onclick=()=>{const before=[...q];if(mutate(s=>{if(s.rails[selected-1][0]!==expected)throw Error('Front sling changed; reload and check rail');s.rails[selected-1].shift();})){render();flash(alias(expected)+' removed from Rail '+selected)}};
+  $('confirmTake').onclick=()=>{const before=[...q];if(mutate(s=>{if(s.rails[selected-1][0]!==expected)throw Error('Front sling changed; reload and check rail');s.rails[selected-1].shift();})){for(let i=0;i<9;i++){previewWeights[(selected-1)+'-'+i]=previewWeights[(selected-1)+'-'+(i+1)];previewDates[(selected-1)+'-'+i]=previewDates[(selected-1)+'-'+(i+1)];}render();flash(alias(expected)+' removed from Rail '+selected)}};
   $('cancelOp').onclick=()=>render();
  };
  document.querySelectorAll('[data-cat-edit]').forEach(b=>b.onclick=()=>{
